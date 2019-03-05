@@ -83,7 +83,6 @@ preprocess_gcm <- function(polygon_sf = hu4,
   lat <- ncvar_get(nc = ncf, varid = "lat")
   time <- ncvar_get(nc = ncf, varid = "time")
   
-  
   meta_fields <- nc_key %>%
     stringr::str_split(pattern = "/") %>% 
     unlist() %>%
@@ -93,32 +92,73 @@ preprocess_gcm <- function(polygon_sf = hu4,
   
   gcm <- meta_fields[3]
   ic <- meta_fields[5]
+ #  
+ #  Yr_bounds <- nc_key %>%
+ #    stringr::str_split(pattern = "/") %>% 
+ #    unlist() %>%
+ #    .[length(.)] %>%
+ #    stringr::str_split(pattern = "_") %>%
+ #    unlist() %>%
+ #    .[length(.)] %>%
+ #    stringr::str_split(pattern = "-") %>%
+ #    unlist() %>%
+ #    purrr::map(.f = ~ substr(x = .x, 1, 4)) %>%
+ #    unlist() %>% 
+ #    as.numeric()
+ #  
+ #  
+ # Mn_bounds <- nc_key %>%
+ #    stringr::str_split(pattern = "/") %>% 
+ #    unlist() %>%
+ #    .[length(.)] %>%
+ #    stringr::str_split(pattern = "_") %>%
+ #    unlist() %>%
+ #    .[length(.)] %>%
+ #    stringr::str_split(pattern = "-") %>%
+ #    unlist() %>%
+ #    purrr::map(.f = ~ substr(x = .x, 5, 6)) %>%
+ #    unlist() %>% 
+ #    as.numeric()
+ 
+ time_bounds <- nc_key %>%
+   stringr::str_split(pattern = "/") %>% 
+   unlist() %>%
+   .[length(.)] %>%
+   stringr::str_split(pattern = "_") %>%
+   unlist() %>%
+   .[length(.)] %>%
+   stringr::str_split(pattern = "-") %>%
+   unlist() %>%
+   purrr::map(.f = ~ substr(x = .x, 1, 6)) %>%
+   unlist() %>% 
+   as.numeric()
+ 
+ begin <- lubridate::date(paste0(substr(time_bounds[1], 1, 4), "-", 
+                        substr(time_bounds[1], 5, 6) , 
+                 "-01"))
+ 
+ end <- lubridate::date(paste0(substr(time_bounds[2], 1, 4), "-", 
+                               substr(time_bounds[2], 5, 6) , 
+                               "-01"))
+ 
+ if(resolution == "monthly"){
+   dates <- seq(lubridate::ymd(begin), lubridate::ymd(end), by = "month")
+ }
+ 
+ 
   
-  Yr_bounds <- nc_key %>%
-    stringr::str_split(pattern = "/") %>% 
-    unlist() %>%
-    .[length(.)] %>%
-    stringr::str_split(pattern = "_") %>%
-    unlist() %>%
-    .[length(.)] %>%
-    stringr::str_split(pattern = "-") %>%
-    unlist() %>%
-    purrr::map(.f = ~ substr(x = .x, 1, 4)) %>%
-    unlist() %>% 
-    as.numeric()
-  
-  if(grepl(pattern = "HadGEM", x = nc_key)){
-    Yr_bounds[1] <- Yr_bounds[1] + 1
-  }
-  
-  if(resolution == "monthly"){
-    Year <- purrr::map(.x = Yr_bounds[1]:Yr_bounds[2], .f = ~ rep(.x, 12)) %>% 
-      unlist() %>%
-      c()
-    
-    Month <- rep(1:12, length(unique(Year)))
-  }
-  
+  # if(Mn_bounds[1] != 1 | Mn_bounds[1] != 1){
+  #   Yr_bounds[1] <- Yr_bounds[1] + 1
+  # }
+  # 
+  # if(resolution == "monthly"){
+  #   Year <- purrr::map(.x = Yr_bounds[1]:Yr_bounds[2], .f = ~ rep(.x, 12)) %>% 
+  #     unlist() %>%
+  #     c()
+  #   
+  #   Month <- rep(1:12, length(unique(Year)))
+  # }
+  # 
   
   if(resolution == "daily"){
     
@@ -212,13 +252,20 @@ preprocess_gcm <- function(polygon_sf = hu4,
                          which(lat_ind == pairs[i,2]))
     }
 
-    vari_mean <- purrr::map2(.x = final_ind[,1], .y = final_ind[,2], .f = ~ vari_data[.x,.y,]) %>% 
-      purrr::reduce(cbind) %>%
-      t() %>%
-      t() %>%
-      rowMeans()
-    
-    vari_mean
+    if(length(time) > 1){
+      # almost all cases
+      vari_mean <- purrr::map2(.x = final_ind[,1], .y = final_ind[,2], .f = ~ vari_data[.x,.y,]) %>% 
+        purrr::reduce(cbind) %>%
+        t() %>%
+        t() %>%
+        rowMeans()
+      
+      return(vari_mean)
+    }
+
+    if(length(time) == 1){
+      return(mean(vari_data))
+    }  
     
   }
   
@@ -228,11 +275,15 @@ preprocess_gcm <- function(polygon_sf = hu4,
   
   ts_mat <- as_tibble(purrr::reduce(.x = ts_list, .f = cbind))
   
-  ts_mat <- dplyr::bind_cols(tibble(Year=Year, Month=Month), ts_mat)
+  # if(gcm %in% c("HadGEM2-CC", "HadGEM-ES")){
+  #   ts_mat <- ts_mat[-1,]
+  # }
+  # 
+  ts_mat <- dplyr::bind_cols(tibble(Date = dates), ts_mat)
   
-  colnames(ts_mat)[3:ncol(ts_mat)] <- as.character(polygon_sf[[spatial_defn_field]])
+  colnames(ts_mat)[2:ncol(ts_mat)] <- as.character(polygon_sf[[spatial_defn_field]])
   
-  ts_df <- tidyr::gather(ts_mat, key = "RegionName", value = climate_variable, 3:ncol(ts_mat))
+  ts_df <- tidyr::gather(ts_mat, key = "RegionName", value = climate_variable, 2:ncol(ts_mat))
   
   output <- list(gcm = gcm, ic = ic, resolution = resolution, ts_df = ts_df)
   
@@ -241,25 +292,6 @@ preprocess_gcm <- function(polygon_sf = hu4,
 
 safely_preprocess_gcm <- purrr::safely(preprocess_gcm)
 
-
-
-# TESTING SECTION FOR DAILY DATA ------------------------------------------
-
-s3_cmip5_historical_daily_temperature <- aws.s3::get_bucket(
-  bucket = export_bucket,
-  prefix = "raw_data/CMIP5/daily/historical",
-  max = Inf
-) %>%
-  purrr::map(.f = ~`class<-`(.x, "list")) %>%
-  dplyr::bind_rows() %>%
-  dplyr::filter(grepl(pattern = "\\/tas_", Key))
-
-polygon_sf = hu4;
-nc_key = s3_cmip5_historical_daily_temperature$Key[1]; 
-resolution = "daily"; 
-scenario = "historical"; 
-climate_variable = "tas"; 
-spatial_defn_field = "NAME"
 
 
 

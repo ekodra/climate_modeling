@@ -6,7 +6,7 @@ source("lib/gcm_preprocessing.R")
 risqGrids::connect_s3()
 export_bucket <- "risqinc"
 
-s3_cmip5_historical_monthly_temperature <- aws.s3::get_bucket(
+s3_cmip5_historical_monthly_tas <- aws.s3::get_bucket(
   bucket = export_bucket,
   prefix = "raw_data/CMIP5/monthly/historical",
   max = Inf
@@ -14,6 +14,16 @@ s3_cmip5_historical_monthly_temperature <- aws.s3::get_bucket(
   purrr::map(.f = ~`class<-`(.x, "list")) %>%
   dplyr::bind_rows() %>%
   dplyr::filter(grepl(pattern = "\\/tas_", Key))
+
+s3_cmip5_historical_daily_tas <- aws.s3::get_bucket(
+  bucket = export_bucket,
+  prefix = "raw_data/CMIP5/daily/historical",
+  max = Inf
+) %>%
+  purrr::map(.f = ~`class<-`(.x, "list")) %>%
+  dplyr::bind_rows() %>%
+  dplyr::filter(grepl(pattern = "\\/tas_", Key))
+
 
 s3_cmip5_historical_monthly_pr <- aws.s3::get_bucket(
   bucket = export_bucket,
@@ -24,8 +34,17 @@ s3_cmip5_historical_monthly_pr <- aws.s3::get_bucket(
   dplyr::bind_rows() %>%
   dplyr::filter(grepl(pattern = "\\/pr_", Key))
 
+s3_cmip5_historical_daily_pr <- aws.s3::get_bucket(
+  bucket = export_bucket,
+  prefix = "raw_data/CMIP5/daily/historical",
+  max = Inf
+) %>%
+  purrr::map(.f = ~`class<-`(.x, "list")) %>%
+  dplyr::bind_rows() %>%
+  dplyr::filter(grepl(pattern = "\\/pr_", Key))
+
 # 
-# s3_cmip5_rcp45_monthly_temperature <- aws.s3::get_bucket(
+# s3_cmip5_rcp45_monthly_tas <- aws.s3::get_bucket(
 #   bucket = export_bucket,
 #   prefix = "raw_data/CMIP5/monthly/rcp45",
 #   max = Inf
@@ -43,7 +62,7 @@ s3_cmip5_historical_monthly_pr <- aws.s3::get_bucket(
 #   dplyr::bind_rows() %>%
 #   dplyr::filter(grepl(pattern = "\\/pr_", Key))
 
-s3_cmip5_rcp85_monthly_temperature <- aws.s3::get_bucket(
+s3_cmip5_rcp85_monthly_tas <- aws.s3::get_bucket(
   bucket = export_bucket,
   prefix = "raw_data/CMIP5/monthly/rcp85",
   max = Inf
@@ -52,12 +71,30 @@ s3_cmip5_rcp85_monthly_temperature <- aws.s3::get_bucket(
   dplyr::bind_rows() %>%
   dplyr::filter(grepl(pattern = "\\/tas_", Key))
 
-
-
-
 s3_cmip5_rcp85_monthly_pr <- aws.s3::get_bucket(
   bucket = export_bucket,
   prefix = "raw_data/CMIP5/monthly/rcp85",
+  max = Inf
+) %>%
+  purrr::map(.f = ~`class<-`(.x, "list")) %>%
+  dplyr::bind_rows() %>%
+  dplyr::filter(grepl(pattern = "\\/pr_", Key))
+
+
+
+
+s3_cmip5_rcp85_daily_tas <- aws.s3::get_bucket(
+  bucket = export_bucket,
+  prefix = "raw_data/CMIP5/daily/rcp85",
+  max = Inf
+) %>%
+  purrr::map(.f = ~`class<-`(.x, "list")) %>%
+  dplyr::bind_rows() %>%
+  dplyr::filter(grepl(pattern = "\\/tas_", Key))
+
+s3_cmip5_rcp85_daily_pr <- aws.s3::get_bucket(
+  bucket = export_bucket,
+  prefix = "raw_data/CMIP5/daily/rcp85",
   max = Inf
 ) %>%
   purrr::map(.f = ~`class<-`(.x, "list")) %>%
@@ -82,7 +119,7 @@ s3_wbd <- aws.s3::get_bucket(
 hu4 <- sf::st_read("~/Downloads/wbdhu4_a_us_september2018.gdb/")
 
 # # all historical temp ------
-# dat <- purrr::map(.x = s3_cmip5_historical_monthly_temperature$Key, 
+# dat <- purrr::map(.x = s3_cmip5_historical_monthly_tas$Key, 
 #                   .f = ~ preprocess_gcm(polygon_sf = hu4, 
 #                                          nc_key = .x, 
 #                                          resolution = "monthly", 
@@ -92,10 +129,10 @@ hu4 <- sf::st_read("~/Downloads/wbdhu4_a_us_september2018.gdb/")
 
 dat <- list()
 
-for(i in 1:length(s3_cmip5_historical_monthly_temperature$Key)){
+for(i in 1:length(s3_cmip5_historical_monthly_tas$Key)){
   print(i)
-  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
-                            nc_key = s3_cmip5_historical_monthly_temperature$Key[i], 
+  dat[[i]] <- preprocess_gcm(polygon_sf = hu4, 
+                            nc_key = s3_cmip5_historical_monthly_tas$Key[i], 
                             resolution = "monthly", 
                             scenario = "historical", 
                             climate_variable = "tas", 
@@ -112,7 +149,7 @@ dat <- list()
 
 for(i in 1:length(s3_cmip5_historical_monthly_pr$Key)){
   print(i)
-  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
+  dat[[i]] <- preprocess_gcm(polygon_sf = hu4, 
                                     nc_key = s3_cmip5_historical_monthly_pr$Key[i], 
                                     resolution = "monthly", 
                                     scenario = "historical", 
@@ -127,21 +164,16 @@ aws.s3::s3saveRDS(dat,
 
 
 
-
-
-
-
-
 dat <- list()
 
-for(i in 1:length(s3_cmip5_rcp85_monthly_temperature$Key)){
+for(i in 1:length(s3_cmip5_rcp85_monthly_tas$Key)){
   print(i)
-  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
-                                    nc_key = s3_cmip5_rcp85_monthly_temperature$Key[i], 
-                                    resolution = "monthly", 
-                                    scenario = "rcp85", 
-                                    climate_variable = "tas", 
-                                    spatial_defn_field = "NAME")
+  dat[[i]] <- preprocess_gcm(polygon_sf = hu4, 
+                            nc_key = s3_cmip5_rcp85_monthly_tas$Key[i], 
+                            resolution = "monthly", 
+                            scenario = "rcp85", 
+                            climate_variable = "tas", 
+                            spatial_defn_field = "NAME")
 }
 
 aws.s3::s3saveRDS(dat, 
@@ -156,7 +188,7 @@ dat <- list()
 
 for(i in 1:length(s3_cmip5_rcp85_monthly_pr$Key)){
   print(i)
-  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
+  dat[[i]] <- preprocess_gcm(polygon_sf = hu4, 
                                     nc_key = s3_cmip5_rcp85_monthly_pr$Key[i], 
                                     resolution = "monthly", 
                                     scenario = "rcp85", 
@@ -172,6 +204,86 @@ aws.s3::s3saveRDS(dat,
 
 
 
+# DAILY -------------------------------------------------------------------
 
+# historical tas
+dat <- list()
+
+for(i in 1:length(s3_cmip5_historical_daily_tas$Key)){
+  print(i)
+  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
+                                    nc_key = s3_cmip5_historical_daily_tas$Key[i], 
+                                    resolution = "daily", 
+                                    scenario = "historical", 
+                                    climate_variable = "tas", 
+                                    spatial_defn_field = "NAME")
+}
+
+aws.s3::s3saveRDS(dat, 
+                  object = "cmip5_daily_historical_tas_hu4.rds", 
+                  bucket = "risqinc/preprocessed_gcm_data/usgs_wbd_hu4"
+)
+
+
+
+# historical pr
+dat <- list()
+
+for(i in 1:length(s3_cmip5_historical_daily_pr$Key)){
+  print(i)
+  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
+                                    nc_key = s3_cmip5_historical_daily_pr$Key[i], 
+                                    resolution = "daily", 
+                                    scenario = "historical", 
+                                    climate_variable = "pr", 
+                                    spatial_defn_field = "NAME")
+}
+
+aws.s3::s3saveRDS(dat, 
+                  object = "cmip5_daily_historical_pr_hu4.rds", 
+                  bucket = "risqinc/preprocessed_gcm_data/usgs_wbd_hu4"
+)
+
+
+
+
+
+# rcp85 tas
+dat <- list()
+
+for(i in 1:length(s3_cmip5_rcp85_daily_tas$Key)){
+  print(i)
+  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
+                                    nc_key = s3_cmip5_rcp85_daily_tas$Key[i], 
+                                    resolution = "daily", 
+                                    scenario = "rcp85", 
+                                    climate_variable = "tas", 
+                                    spatial_defn_field = "NAME")
+}
+
+aws.s3::s3saveRDS(dat, 
+                  object = "cmip5_daily_rcp85_tas_hu4.rds", 
+                  bucket = "risqinc/preprocessed_gcm_data/usgs_wbd_hu4"
+)
+
+
+
+# rcp85 pr
+dat <- list()
+
+for(i in 1:length(s3_cmip5_rcp85_daily_pr$Key)){
+  print(i)
+  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
+                                    nc_key = s3_cmip5_rcp85_daily_pr$Key[i], 
+                                    resolution = "daily", 
+                                    scenario = "rcp85", 
+                                    climate_variable = "pr", 
+                                    spatial_defn_field = "NAME")
+}
+
+aws.s3::s3saveRDS(dat, 
+                  object = "cmip5_daily_rcp85_pr_hu4.rds", 
+                  bucket = "risqinc/preprocessed_gcm_data/usgs_wbd_hu4"
+)
 
 
