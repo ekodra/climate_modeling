@@ -142,10 +142,10 @@ preprocess_gcm <- function(polygon_sf = hu4,
     
     dates <- seq(lubridate::ymd(begin), lubridate::ymd(end), by = "day")
     
-    yr_df <- tibble(Year = Yr_bounds[1]:Yr_bounds[2], Len = 365)
-    
-    if(ncf$dim$time$calendar == "proleptic_gregorian"){
-      ## leap years -- need to handle
+    if(ncf$dim$time$calendar == "365_day" | ncf$dim$time$calendar == "noleap"){
+      # no leap years
+      ly_index <- which( as.character(dates) %>% endsWith("02-29") )
+      dates <- dates[-ly_index]
     }
   }
   
