@@ -49,11 +49,13 @@ hist_tas_test_truth <- cmip5$historical_tas_all %>%
 
 hist_pr_train_truth <- cmip5$historical_pr_all %>% 
   dplyr::filter(Year >= 1960 & Year <= 1982) %>%
-  dplyr::filter(gcm == "NorESM1-M")
+  dplyr::filter(gcm == "NorESM1-M") %>%
+  dplyr::mutate(climate_variable = sqrt(climate_variable))
 
 hist_pr_test_truth <- cmip5$historical_pr_all %>% 
   dplyr::filter(Year >= 1983 & Year <= 2005) %>%
-  dplyr::filter(gcm == "NorESM1-M")
+  dplyr::filter(gcm == "NorESM1-M") %>%
+  dplyr::mutate(climate_variable = sqrt(climate_variable))
 
 
 
@@ -156,8 +158,8 @@ errors_df <- hist_train %>%
 
 # couple quick summaries
 errors_df %>%
-  group_by(Month, p) %>%
-  summarise(mean(tas_error, na.rm = T), mean(pr_error, na.rm=TRUE)) %>% 
+  group_by(gcm) %>%
+  summarise(mean(tas_error, na.rm = T), mean(pr_error, na.rm=TRUE)) %>%
   as.data.frame()
 
 
@@ -208,15 +210,16 @@ test_df_climatology <- hist_test %>%
 modeling_df_climatology_list <- split(modeling_df_climatology, f = modeling_df_climatology$gcm_ic)
 
 
-gcms <- as.character(modeling_df_climatology$gcm %>% unique())
+gcms <- as.character(modeling_df_climatology$gcm %>% unique()) %>%
+  .[-length(.)]
 gcm_ics <- as.character(modeling_df_climatology$gcm_ic %>% unique())
 
-j=18
+j=length(gcms)
 
 t1 <- Sys.time()
 mod <- mgcv::gam(list(
-  tas_error ~ s(lat, lon, bs = "gp", by = gcm, m = 2),#:s(gcm_ic, bs="re"), 
-  pr_error ~ s(lat, lon, bs = "gp", by = gcm, m = 2)),# + s(gcm_ic, bs="re")),
+  tas_error ~ s(lat, lon, bs = "gp", by = gcm, m = 2) + s(gcm_ic, bs="re"), 
+  pr_error ~ s(lat, lon, bs = "gp", by = gcm, m = 2) + s(gcm_ic, bs="re")),
   family=mvn(d=2), discrete = TRUE,control = gam.control(trace = TRUE),
   data = modeling_df_climatology  %>%
     mutate(gcm = as.factor(gcm)) %>%
@@ -231,30 +234,36 @@ runGam <- function(df){
   return(mod)
 }
 
-mods <- purrr::map(.x = modeling_df_climatology_list, .f = ~runGam(.x))
+# mods <- purrr::map(.x = modeling_df_climatology_list, .f = ~runGam(.x))
+# 
+# yhat_list <- purrr::map(.x =mods, .f = ~ predict(.x, se.fit = TRUE) )
+# 
+# yhat <- list()
+# yhat$fit <- purrr::map(.x = yhat_list, .f = ~ .x$fit) %>%
+#   reduce(rbind)
+# yhat$se.fit <- purrr::map(.x = yhat_list, .f = ~ .x$se.fit) %>%
+#   reduce(rbind)
 
-yhat_list <- purrr::map(.x =mods, .f = ~ predict(.x, se.fit = TRUE) )
-
-yhat <- list()
-yhat$fit <- purrr::map(.x = yhat_list, .f = ~ .x$fit) %>%
-  reduce(rbind)
-yhat$se.fit <- purrr::map(.x = yhat_list, .f = ~ .x$se.fit) %>%
-  reduce(rbind)
-
-# yhat <- predict(mod, se.fit = TRUE)
+yhat <- predict(mod, se.fit = TRUE)
 
 plot(yhat$fit[,1], modeling_df_climatology$tas_error)
 lines(x = c(-100:100), y=c(-100:100))
 plot(yhat$fit[,2]  + 3*yhat$se.fit[,2], modeling_df_climatology$pr_error)
 lines(x = c(-100:100), y=c(-100:100))
 
-tas_error_error_distribution <- mod$fitted.values[,1] - modeling_df_climatology$tas_error
-qqnorm(tas_error_error_distribution) # looks good.
+tas_error_error_distribution <- mod$fitted.values[,1] - modeling_df_climatology  %>%
+  mutate(gcm = as.factor(gcm)) %>%
+  filter(gcm %in% gcms[1:j]) %>%
+  .$tas_error
+qqnorm(tas_error_error_distribution) 
 qqline(tas_error_error_distribution)
 
 
 
-pr_error_error_distribution  <- mod$fitted.values[,2] - modeling_df_climatology$pr_error
+pr_error_error_distribution  <- mod$fitted.values[,2] - modeling_df_climatology  %>%
+  mutate(gcm = as.factor(gcm)) %>%
+  filter(gcm %in% gcms[1:j]) %>%
+  .$pr_error
 
 qqnorm(pr_error_error_distribution)
 qqline(pr_error_error_distribution)
@@ -267,9 +276,12 @@ qqline(pr_error_error_distribution)
 # first join fitted params back onto modeling climatology
 
 holdout_df <- modeling_df_climatology %>% 
+  mutate(gcm = as.factor(gcm)) %>%
+  filter(gcm %in% gcms[1:j]) %>%
   mutate(gcm_ic = as.factor(gcm_ic)) %>%
   dplyr::select(-tas_mod, -pr_mod, -tas_obs, -pr_obs) %>% 
-  bind_cols(tibble(tas_structural_error = yhat$fit[,1], pr_structural_error = yhat$fit[,2], 
+  bind_cols(tibble(tas_structural_error = yhat$fit[,1], 
+                   pr_structural_error = yhat$fit[,2], 
                    tas_structural_error_se = yhat$se.fit[,1],
                    pr_structural_error_se = yhat$se.fit[,2]
                    )) %>%
@@ -313,7 +325,7 @@ bootstrapped_sampling_error_tas <- sample(x = tas_e_e_density_normalized$x,
 
 total_bootstrap <- purrr::map2(.x = boostrapped_structural_error_tas, 
             .y = bootstrapped_sampling_error_tas, 
-            .f = ~ .x - .y)
+            .f = ~ .y - .x)
 
 full_uq_spread_tas <- purrr::map2(.x = total_bootstrap, 
                                   .y = holdout_df$tas_mod, 
@@ -384,7 +396,7 @@ bootstrapped_sampling_error_pr <- sample(x = pr_e_e_density_normalized$x,
 
 total_bootstrap <- purrr::map2(.x = boostrapped_structural_error_pr, 
                                .y = bootstrapped_sampling_error_pr, 
-                               .f = ~ .x + .y)
+                               .f = ~ .y - .x)
 
 full_uq_spread_pr <- purrr::map2(.x = total_bootstrap, 
                                   .y = holdout_df$pr_mod, 

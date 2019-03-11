@@ -211,7 +211,7 @@ dat <- list()
 
 for(i in 1:length(s3_cmip5_historical_daily_tas$Key)){
   print(i)
-  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
+  dat[[i]] <- preprocess_gcm(polygon_sf = hu4, 
                                     nc_key = s3_cmip5_historical_daily_tas$Key[i], 
                                     resolution = "daily", 
                                     scenario = "historical", 

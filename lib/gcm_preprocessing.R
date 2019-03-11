@@ -92,97 +92,60 @@ preprocess_gcm <- function(polygon_sf = hu4,
   
   gcm <- meta_fields[3]
   ic <- meta_fields[5]
- #  
- #  Yr_bounds <- nc_key %>%
- #    stringr::str_split(pattern = "/") %>% 
- #    unlist() %>%
- #    .[length(.)] %>%
- #    stringr::str_split(pattern = "_") %>%
- #    unlist() %>%
- #    .[length(.)] %>%
- #    stringr::str_split(pattern = "-") %>%
- #    unlist() %>%
- #    purrr::map(.f = ~ substr(x = .x, 1, 4)) %>%
- #    unlist() %>% 
- #    as.numeric()
- #  
- #  
- # Mn_bounds <- nc_key %>%
- #    stringr::str_split(pattern = "/") %>% 
- #    unlist() %>%
- #    .[length(.)] %>%
- #    stringr::str_split(pattern = "_") %>%
- #    unlist() %>%
- #    .[length(.)] %>%
- #    stringr::str_split(pattern = "-") %>%
- #    unlist() %>%
- #    purrr::map(.f = ~ substr(x = .x, 5, 6)) %>%
- #    unlist() %>% 
- #    as.numeric()
- 
- time_bounds <- nc_key %>%
-   stringr::str_split(pattern = "/") %>% 
-   unlist() %>%
-   .[length(.)] %>%
-   stringr::str_split(pattern = "_") %>%
-   unlist() %>%
-   .[length(.)] %>%
-   stringr::str_split(pattern = "-") %>%
-   unlist() %>%
-   purrr::map(.f = ~ substr(x = .x, 1, 6)) %>%
-   unlist() %>% 
-   as.numeric()
- 
- begin <- lubridate::date(paste0(substr(time_bounds[1], 1, 4), "-", 
-                        substr(time_bounds[1], 5, 6) , 
-                 "-01"))
- 
- end <- lubridate::date(paste0(substr(time_bounds[2], 1, 4), "-", 
-                               substr(time_bounds[2], 5, 6) , 
-                               "-01"))
  
  if(resolution == "monthly"){
+   time_bounds <- nc_key %>%
+     stringr::str_split(pattern = "/") %>% 
+     unlist() %>%
+     .[length(.)] %>%
+     stringr::str_split(pattern = "_") %>%
+     unlist() %>%
+     .[length(.)] %>%
+     stringr::str_split(pattern = "-") %>%
+     unlist() %>%
+     purrr::map(.f = ~ substr(x = .x, 1, 6)) %>%
+     unlist() %>% 
+     as.numeric()
+   
+   begin <- lubridate::date(paste0(substr(time_bounds[1], 1, 4), "-", 
+                                   substr(time_bounds[1], 5, 6) , 
+                                   "-01"))
+   
+   end <- lubridate::date(paste0(substr(time_bounds[2], 1, 4), "-", 
+                                 substr(time_bounds[2], 5, 6) , 
+                                 "-01"))
    dates <- seq(lubridate::ymd(begin), lubridate::ymd(end), by = "month")
  }
- 
- 
-  
-  # if(Mn_bounds[1] != 1 | Mn_bounds[1] != 1){
-  #   Yr_bounds[1] <- Yr_bounds[1] + 1
-  # }
-  # 
-  # if(resolution == "monthly"){
-  #   Year <- purrr::map(.x = Yr_bounds[1]:Yr_bounds[2], .f = ~ rep(.x, 12)) %>% 
-  #     unlist() %>%
-  #     c()
-  #   
-  #   Month <- rep(1:12, length(unique(Year)))
-  # }
-  # 
   
   if(resolution == "daily"){
+    
+    time_bounds <- nc_key %>%
+      stringr::str_split(pattern = "/") %>% 
+      unlist() %>%
+      .[length(.)] %>%
+      stringr::str_split(pattern = "_") %>%
+      unlist() %>%
+      .[length(.)] %>%
+      stringr::str_split(pattern = "-") %>%
+      unlist() %>%
+      purrr::map(.f = ~ substr(x = .x, 1, 8)) %>%
+      unlist() %>% 
+      as.numeric()
+    
+    begin <- lubridate::date(paste0(substr(time_bounds[1], 1, 4), "-", 
+                                    substr(time_bounds[1], 5, 6) , "-", 
+                                    substr(time_bounds[1], 7, 8)))
+    
+    end <- lubridate::date(paste0(substr(time_bounds[2], 1, 4), "-", 
+                                    substr(time_bounds[2], 5, 6) , "-", 
+                                    substr(time_bounds[2], 7, 8)))
+    
+    dates <- seq(lubridate::ymd(begin), lubridate::ymd(end), by = "day")
     
     yr_df <- tibble(Year = Yr_bounds[1]:Yr_bounds[2], Len = 365)
     
     if(ncf$dim$time$calendar == "proleptic_gregorian"){
       ## leap years -- need to handle
-      
-      yr_df$Len[yr_df$Year %in% leap_years] <- 366
-      
-      Year <- purrr::map2(.x = yr_df$Year, .y = yr_df$Len,
-                          .f = ~ rep(.x, .y)) %>% 
-        unlist() %>%
-        c()
-      
-      Month <- NULL
-      for(y in Yr_bounds[1]:Yr_bounds[2]){
-        Next <- regular_month_seq
-        if(y %in% leap_years){
-          Next <- leap_month_seq
-        }
-        Month <- c(Month, Next)
-      }
-      
     }
   }
   
