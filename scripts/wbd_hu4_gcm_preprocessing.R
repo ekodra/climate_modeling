@@ -207,7 +207,7 @@ aws.s3::s3saveRDS(dat,
 # DAILY -------------------------------------------------------------------
 
 # historical tas
-for(i in 4:length(s3_cmip5_historical_daily_tas$Key)){
+for(i in 1:length(s3_cmip5_historical_daily_tas$Key)){
   print(i)
   dat <- preprocess_gcm(polygon_sf = hu4, 
                                     nc_key = s3_cmip5_historical_daily_tas$Key[i], 
@@ -228,65 +228,75 @@ for(i in 4:length(s3_cmip5_historical_daily_tas$Key)){
 }
 
 
-
 # historical pr
-dat <- list()
-
 for(i in 1:length(s3_cmip5_historical_daily_pr$Key)){
   print(i)
-  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
-                                    nc_key = s3_cmip5_historical_daily_pr$Key[i], 
-                                    resolution = "daily", 
-                                    scenario = "historical", 
-                                    climate_variable = "pr", 
-                                    spatial_defn_field = "NAME")
+  dat <- preprocess_gcm(polygon_sf = hu4, 
+                        nc_key = s3_cmip5_historical_daily_pr$Key[i], 
+                        resolution = "daily", 
+                        scenario = "historical", 
+                        climate_variable = "pr", 
+                        spatial_defn_field = "NAME")
+  
+  gcm <- dat$gcm 
+  ic <- dat$ic
+  begin <- min(dat$ts_df$Date)
+  end <- max(dat$ts_df$Date)
+  obj_name <- paste0(paste("cmip5_daily_historical_pr_hu4", gcm, ic, begin, end, sep='_'),  ".rds")
+  aws.s3::s3saveRDS(dat, 
+                    object = obj_name, 
+                    bucket = "risqinc/preprocessed_gcm_data/usgs_wbd_hu4")
+  
 }
-
-aws.s3::s3saveRDS(dat, 
-                  object = "cmip5_daily_historical_pr_hu4.rds", 
-                  bucket = "risqinc/preprocessed_gcm_data/usgs_wbd_hu4"
-)
 
 
 
 
 
 # rcp85 tas
-dat <- list()
-
-for(i in 1:length(s3_cmip5_rcp85_daily_tas$Key)){
+for(i in 2:length(s3_cmip5_rcp85_daily_tas$Key)){
   print(i)
-  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
-                                    nc_key = s3_cmip5_rcp85_daily_tas$Key[i], 
-                                    resolution = "daily", 
-                                    scenario = "rcp85", 
-                                    climate_variable = "tas", 
-                                    spatial_defn_field = "NAME")
+  dat <- preprocess_gcm(polygon_sf = hu4, 
+                        nc_key = s3_cmip5_rcp85_daily_tas$Key[i], 
+                        resolution = "daily", 
+                        scenario = "rcp85", 
+                        climate_variable = "tas", 
+                        spatial_defn_field = "NAME")
+  
+  gcm <- dat$gcm 
+  ic <- dat$ic
+  begin <- min(dat$ts_df$Date)
+  end <- max(dat$ts_df$Date)
+  obj_name <- paste0(paste("cmip5_daily_rcp85_tas_hu4", gcm, ic, begin, end, sep='_'),  ".rds")
+  aws.s3::s3saveRDS(dat, 
+                    object = obj_name, 
+                    bucket = "risqinc/preprocessed_gcm_data/usgs_wbd_hu4")
+  
 }
-
-aws.s3::s3saveRDS(dat, 
-                  object = "cmip5_daily_rcp85_tas_hu4.rds", 
-                  bucket = "risqinc/preprocessed_gcm_data/usgs_wbd_hu4"
-)
-
 
 
 # rcp85 pr
-dat <- list()
-
 for(i in 1:length(s3_cmip5_rcp85_daily_pr$Key)){
   print(i)
-  dat[[i]] <- safely_preprocess_gcm(polygon_sf = hu4, 
-                                    nc_key = s3_cmip5_rcp85_daily_pr$Key[i], 
-                                    resolution = "daily", 
-                                    scenario = "rcp85", 
-                                    climate_variable = "pr", 
-                                    spatial_defn_field = "NAME")
+  dat <- preprocess_gcm(polygon_sf = hu4, 
+                        nc_key = s3_cmip5_rcp85_daily_pr$Key[i], 
+                        resolution = "daily", 
+                        scenario = "rcp85", 
+                        climate_variable = "pr", 
+                        spatial_defn_field = "NAME")
+  
+  gcm <- dat$gcm 
+  ic <- dat$ic
+  begin <- min(dat$ts_df$Date)
+  end <- max(dat$ts_df$Date)
+  obj_name <- paste0(paste("cmip5_daily_rcp85_pr_hu4", gcm, ic, begin, end, sep='_'),  ".rds")
+  aws.s3::s3saveRDS(dat, 
+                    object = obj_name, 
+                    bucket = "risqinc/preprocessed_gcm_data/usgs_wbd_hu4")
+  
 }
 
-aws.s3::s3saveRDS(dat, 
-                  object = "cmip5_daily_rcp85_pr_hu4.rds", 
-                  bucket = "risqinc/preprocessed_gcm_data/usgs_wbd_hu4"
-)
+
+
 
 

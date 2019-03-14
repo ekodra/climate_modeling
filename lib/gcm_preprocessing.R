@@ -145,7 +145,21 @@ preprocess_gcm <- function(polygon_sf = hu4,
     if(ncf$dim$time$calendar == "365_day" | ncf$dim$time$calendar == "noleap"){
       # no leap years
       ly_index <- which( as.character(dates) %>% endsWith("02-29") )
-      dates <- dates[-ly_index]
+      if(length(ly_index) > 0){
+        dates <- dates[-ly_index]
+      }
+    }
+    if(ncf$dim$time$calendar == "360_day"){
+      # remove all 31s, add any missing 30s (and 29s)
+      dates <- dates[-which( as.character(dates) %>% 
+                              endsWith("-31") )]
+      
+      the29s <- paste0(unique(substr(dates, 1, 7)), "-29")
+      the30s <- paste0(unique(substr(dates, 1, 7)), "-30")
+      
+      dates <- c(as.character(dates), the29s, the30s) %>% 
+        unique() %>%
+        sort()
     }
   }
   

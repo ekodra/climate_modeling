@@ -1,4 +1,5 @@
 source("lib/gcm_preprocessing.R")
+source("lib/climate_metrics.R")
 
 
 # Set up environment ------------------------------------------------------
@@ -7,10 +8,13 @@ risqGrids::connect_s3()
 export_bucket <- "risqinc/preprocessed_gcm_data/usgs_wbd_hu4"
 
 
+# helper
+replace_inf <- function(x){
+  x[x == -Inf] <- 0
+  x
+}
 
 # MONTHLY -----------------------------------------------------------------
-
-# READ IN OBJECTS ---------------------------------------------------------
 
 
 cmip5_monthly_historical_tas_hu4 <- aws.s3::s3readRDS(object = "cmip5_monthly_historical_tas_hu4.rds", 
@@ -86,14 +90,67 @@ tmp <- list(historical_tas_all = historical_tas_all,
             rcp85_pr_all = rcp85_pr_all 
             )
 
-saveRDS(tmp, "cmip5_dat.rds") # put on flash drive.
+saveRDS(tmp, "cmip5_monthly_dat.rds") # put on flash drive.
 
 
 
+# CMIP5 DAILY MAXIMA PRECIP -----------------------------------------------
 
-# split into hist and future
-historical_tas_all_hist <-  historical_tas_all %>%
-  dplyr::filter(Year < med_yr) %>% 
-  dplyr::group_by()
+source("lib/gcm_preprocessing.R")
+
+
+# Set up environment ------------------------------------------------------
+
+risqGrids::connect_s3()
+export_bucket <- "risqinc"
+
+s3_cmip5_historical_daily_pr_preprocessed <- aws.s3::get_bucket(
+  bucket = export_bucket,
+  prefix = "preprocessed_gcm_data/usgs_wbd_hu4/cmip5_daily_historical_pr",
+  max = Inf
+) %>%
+  purrr::map(.f = ~`class<-`(.x, "list")) %>%
+  dplyr::bind_rows() 
+
+
+daily_pr_postprocessing <- function(s3_obj){
+  dat <- aws.s3::s3readRDS(object = s3_obj, 
+                           bucket = export_bucket)
+  df <- dat$ts_df %>%
+    na.omit() %>%
+    dplyr::mutate( Year  = lubridate::year(Date), 
+                   Month = lubridate::month(Date)) %>% 
+    dplyr::mutate(pr_mm = 86400*climate_variable) %>%
+    dplyr::group_by (RegionName, Year, Month) %>%
+    dplyr::summarise(pr_mm_max = max(pr_mm ), # to mm/day
+                     Date_max = Date[which.max(pr_mm)], 
+                     wet_days_percent = sum(pr_mm > 1) / dplyr::n(), 
+                     cdd = consec_dry_days(pr_mm, th = 1), 
+                     cwd = consec_wet_days(pr_mm, th = 1)
+    ) %>%
+    ungroup() %>%
+    dplyr::mutate(gcm = dat$gcm, ic = dat$ic) %>%
+    dplyr::mutate(gcm_ic = paste(gcm, ic, sep='_')) %>%
+    dplyr::mutate(cdd = replace_inf(cdd), 
+                  cwd = replace_inf(cwd))
+  
+  return(df)
+}
+
+
+daily_pr_postprocessing(s3_obj = s3_cmip5_historical_daily_pr_preprocessed$Key[2])
+
+# 
+# for(i in 1:nrow(s3_cmip5_historical_daily_pr_preprocessed)){
+#   print(i)
+#   tmp <- daily_pr_postprocessing(s3_obj = s3_cmip5_historical_daily_pr_preprocessed$Key[i])
+# }
+
+daily_pr_statistics_historical <- purrr::map(.x = s3_cmip5_historical_daily_pr_preprocessed$Key, 
+           .f = ~ daily_pr_postprocessing(s3_obj = .x)) %>% 
+  purrr::reduce(.f = rbind)
+
+
+
 
 
