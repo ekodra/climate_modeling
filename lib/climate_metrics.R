@@ -11,3 +11,19 @@ consec_wet_days <- function(x, th = 0.2){
   lens <- rle(y)$lengths[rle(y)$values == 1]
   return(max(lens))
 }
+
+kelvin_2_fareinheit <- function(x){
+  ((x - 273.15) * 9/5) + 32
+}
+
+Cooling_degree_days <- function(x){
+  y <- kelvin_2_fareinheit(x) - 65
+  y[y <= 0] <- 0
+  return(sum(y))
+}
+
+Heating_degree_days <- function(x){
+  y <- kelvin_2_fareinheit(x) - 65
+  y[y >= 0] <- 0
+  return(sum(abs(y)))
+}

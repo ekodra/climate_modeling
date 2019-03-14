@@ -113,11 +113,41 @@ s3_cmip5_historical_daily_pr_preprocessed <- aws.s3::get_bucket(
   dplyr::bind_rows() 
 
 
+s3_cmip5_rcp85_daily_pr_preprocessed <- aws.s3::get_bucket(
+  bucket = export_bucket,
+  prefix = "preprocessed_gcm_data/usgs_wbd_hu4/cmip5_daily_rcp85_pr",
+  max = Inf
+) %>%
+  purrr::map(.f = ~`class<-`(.x, "list")) %>%
+  dplyr::bind_rows() 
+
+
+s3_cmip5_historical_daily_tas_preprocessed <- aws.s3::get_bucket(
+  bucket = export_bucket,
+  prefix = "preprocessed_gcm_data/usgs_wbd_hu4/cmip5_daily_historical_tas",
+  max = Inf
+) %>%
+  purrr::map(.f = ~`class<-`(.x, "list")) %>%
+  dplyr::bind_rows() 
+
+
+s3_cmip5_rcp85_daily_tas_preprocessed <- aws.s3::get_bucket(
+  bucket = export_bucket,
+  prefix = "preprocessed_gcm_data/usgs_wbd_hu4/cmip5_daily_rcp85_tas",
+  max = Inf
+) %>%
+  purrr::map(.f = ~`class<-`(.x, "list")) %>%
+  dplyr::bind_rows() 
+
+
+
+# PROCESS PR --------------------------------------------------------------
 daily_pr_postprocessing <- function(s3_obj){
   dat <- aws.s3::s3readRDS(object = s3_obj, 
                            bucket = export_bucket)
   df <- dat$ts_df %>%
     na.omit() %>%
+    dplyr::mutate( Date = as.Date(Date) ) %>% # in case not date type
     dplyr::mutate( Year  = lubridate::year(Date), 
                    Month = lubridate::month(Date)) %>% 
     dplyr::mutate(pr_mm = 86400*climate_variable) %>%
@@ -138,19 +168,93 @@ daily_pr_postprocessing <- function(s3_obj){
 }
 
 
-daily_pr_postprocessing(s3_obj = s3_cmip5_historical_daily_pr_preprocessed$Key[2])
+# daily_pr_postprocessing(s3_obj = s3_cmip5_historical_daily_pr_preprocessed$Key[2])
 
-# 
-# for(i in 1:nrow(s3_cmip5_historical_daily_pr_preprocessed)){
-#   print(i)
-#   tmp <- daily_pr_postprocessing(s3_obj = s3_cmip5_historical_daily_pr_preprocessed$Key[i])
-# }
+tmp <- list()
+for(i in 1:nrow(s3_cmip5_historical_daily_pr_preprocessed)){
+  print(i)
+  tmp[[i]] <- daily_pr_postprocessing(s3_obj = s3_cmip5_historical_daily_pr_preprocessed$Key[i])
+}
 
-daily_pr_statistics_historical <- purrr::map(.x = s3_cmip5_historical_daily_pr_preprocessed$Key, 
-           .f = ~ daily_pr_postprocessing(s3_obj = .x)) %>% 
-  purrr::reduce(.f = rbind)
+daily_pr_statistics_historical <- purrr::reduce(.x = tmp, .f = rbind)
+
+saveRDS(daily_pr_statistics_historical, "cmip5_daily_pr_statistics_historical.rds")
 
 
+tmp <- list()
+for(i in 1:nrow(s3_cmip5_rcp85_daily_pr_preprocessed)){
+  print(i)
+  tmp[[i]] <- daily_pr_postprocessing(s3_obj = s3_cmip5_rcp85_daily_pr_preprocessed$Key[i])
+}
 
+daily_pr_statistics_rcp85 <- purrr::reduce(.x = tmp, .f = rbind)
+
+saveRDS(daily_pr_statistics_rcp85, "cmip5_daily_pr_statistics_rcp85.rds")
+
+
+# SAME BUT TAS ------------------------------------------------------------
+# include: cdd, hdd, deviation from mean temp during extreme rainfall, mean temp
+daily_tas_postprocessing <- function(s3_obj = s3_cmip5_historical_daily_tas_preprocessed$Key[1], 
+                                     pr_df = daily_pr_statistics_historical){
+  
+  
+  dat <- aws.s3::s3readRDS(object = s3_obj, 
+                           bucket = export_bucket)
+  
+  df_pr_relation <- dat$ts_df %>%
+    na.omit() %>%
+    dplyr::mutate( Date = as.Date(Date) ) # in case not date type
+  
+  
+  # the piece where you get mean tas on the day of precip event
+  tas_pr_df <- pr_df %>%
+    dplyr::filter(gcm == dat$gcm & ic == dat$ic) %>%
+    dplyr::select(RegionName, Year, Month, Date_max) %>%
+    full_join(df_pr_relation, by = c("RegionName", "Date_max" = "Date")) %>% 
+    dplyr::rename(tas_prMaxima = climate_variable) 
+  
+  df <- dat$ts_df %>%
+    na.omit() %>%
+    dplyr::mutate( Date = as.Date(Date) ) %>% # in case not date type
+    dplyr::mutate( Year  = lubridate::year(Date), 
+                   Month = lubridate::month(Date)) %>% 
+    dplyr::group_by (RegionName, Year, Month) %>%
+    dplyr::summarise(tas_mean = mean(climate_variable), # to mm/day
+                     heating_degree_days = Heating_degree_days(climate_variable), 
+                     cooling_degree_days = Cooling_degree_days(climate_variable)
+    ) %>%
+    ungroup() %>%
+    dplyr::mutate(gcm = dat$gcm, ic = dat$ic) %>%
+    dplyr::mutate(gcm_ic = paste(gcm, ic, sep='_')) %>%
+    inner_join(  tas_pr_df, by = c("RegionName", "Year", "Month")) %>% 
+    na.omit() %>%
+    dplyr::mutate(pr_maxima_tas_anomaly = tas_prMaxima - tas_mean)
+  
+  df %>% group_by(Month) %>% summarise(mean(pr_maxima_tas_anomaly))
+  
+  return(df)
+}
+
+
+tmp <- list()
+for(i in 1:nrow(s3_cmip5_historical_daily_tas_preprocessed)){
+  print(i)
+  tmp[[i]] <- daily_tas_postprocessing(s3_obj = s3_cmip5_historical_daily_tas_preprocessed$Key[i])
+}
+
+daily_tas_statistics_historical <- purrr::reduce(.x = tmp, .f = rbind)
+
+saveRDS(daily_tas_statistics_historical, "cmip5_daily_tas_statistics_historical.rds")
+
+
+tmp <- list()
+for(i in 1:nrow(s3_cmip5_rcp85_daily_tas_preprocessed)){
+  print(i)
+  tmp[[i]] <- daily_tas_postprocessing(s3_obj = s3_cmip5_rcp85_daily_tas_preprocessed$Key[i])
+}
+
+daily_tas_statistics_rcp85 <- purrr::reduce(.x = tmp, .f = rbind)
+
+saveRDS(daily_tas_statistics_rcp85, "cmip5_daily_tas_statistics_rcp85.rds")
 
 
