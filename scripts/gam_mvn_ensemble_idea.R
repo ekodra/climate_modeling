@@ -4,7 +4,7 @@ library(tidyverse)
 library(purrr)
 library(mgcv)
 
-cmip5 <- readRDS("cmip5_dat.rds")
+cmip5 <- readRDS("cmip5_monthly_dat.rds")
 hu4 <- sf::st_read("~/Downloads/wbdhu4_a_us_september2018.gdb/")
 
 hu4_centroids <- sf::st_centroid(hu4) %>%
@@ -18,42 +18,42 @@ cmip5$historical_tas_all %>%
   dplyr::distinct() %>%
   as.data.frame()
 
-# training: 1960-1981
-# test: 1982-2005
+# training: 1976-2005
+# test: 2020-2049
 hist_tas_train <- cmip5$historical_tas_all %>% 
-  dplyr::filter(Year >= 1960 & Year <= 1982) %>%
+  dplyr::filter(Year >= 1976 & Year <= 2005) %>%
   dplyr::filter(gcm != "NorESM1-M")
 
-hist_tas_test <- cmip5$historical_tas_all %>% 
-  dplyr::filter(Year >= 1983 & Year <= 2005) %>%
+hist_tas_test <- cmip5$rcp85_tas_all %>% 
+  dplyr::filter(Year >= 2020 & Year <= 2049) %>%
   dplyr::filter(gcm != "NorESM1-M")
 
 hist_pr_train <- cmip5$historical_pr_all %>% 
-  dplyr::filter(Year >= 1960 & Year <= 1982) %>%
+  dplyr::filter(Year >= 1976 & Year <= 2005) %>%
   dplyr::filter(gcm != "NorESM1-M") %>%
   dplyr::mutate(climate_variable = sqrt(climate_variable))
 
-hist_pr_test <- cmip5$historical_pr_all %>% 
-  dplyr::filter(Year >= 1983 & Year <= 2005) %>%
+hist_pr_test <- cmip5$rcp85_pr_all %>% 
+  dplyr::filter(Year >= 2020 & Year <= 2049) %>%
   dplyr::filter(gcm != "NorESM1-M") %>%
   dplyr::mutate(climate_variable = sqrt(climate_variable))
 
 # synthetic truth for now
 hist_tas_train_truth <- cmip5$historical_tas_all %>% 
-  dplyr::filter(Year >= 1960 & Year <= 1982) %>%
+  dplyr::filter(Year >= 1976 & Year <= 2005) %>%
   dplyr::filter(gcm == "NorESM1-M")
 
-hist_tas_test_truth <- cmip5$historical_tas_all %>% 
-  dplyr::filter(Year >= 1983 & Year <= 2005) %>%
+hist_tas_test_truth <- cmip5$rcp85_tas_all %>% 
+  dplyr::filter(Year >= 2020 & Year <= 2049) %>%
   dplyr::filter(gcm == "NorESM1-M")
 
 hist_pr_train_truth <- cmip5$historical_pr_all %>% 
-  dplyr::filter(Year >= 1960 & Year <= 1982) %>%
+  dplyr::filter(Year >= 1976 & Year <= 2005) %>%
   dplyr::filter(gcm == "NorESM1-M") %>%
   dplyr::mutate(climate_variable = sqrt(climate_variable))
 
-hist_pr_test_truth <- cmip5$historical_pr_all %>% 
-  dplyr::filter(Year >= 1983 & Year <= 2005) %>%
+hist_pr_test_truth <- cmip5$rcp85_pr_all %>% 
+  dplyr::filter(Year >= 2020 & Year <= 2049) %>%
   dplyr::filter(gcm == "NorESM1-M") %>%
   dplyr::mutate(climate_variable = sqrt(climate_variable))
 
@@ -68,11 +68,9 @@ hist_train <- hist_tas_train %>%
               dplyr::rename(pr = climate_variable), 
             by = c("RegionName", "gcm", "ic", "Year", "Month")) %>%
   mutate(gcm_ic = paste(gcm, ic, sep='_')) %>%
-  group_by(RegionName, gcm, ic, Month) %>%
-  mutate(q = rev(rank(tas)))  %>%
-  mutate(p = q/ length(tas)) %>%
+  group_by(RegionName, gcm, ic, gcm_ic) %>%
+  summarise(tas = mean(tas), pr = mean(pr)) %>%
   ungroup()
-
 
 hist_train_truth <- hist_tas_train_truth %>%
   dplyr::rename(tas = climate_variable) %>%
@@ -80,11 +78,9 @@ hist_train_truth <- hist_tas_train_truth %>%
               dplyr::rename(pr = climate_variable), 
             by = c("RegionName", "gcm", "ic", "Year", "Month")) %>% 
   mutate(gcm_ic = paste(gcm, ic, sep='_')) %>% 
-  group_by(RegionName, gcm, ic, Month) %>%
-  mutate(q = rev(rank(tas)))  %>%
-  mutate(p = q/ length(tas)) %>%
+  group_by(RegionName, gcm, ic, gcm_ic) %>%
+  summarise(tas = mean(tas), pr = mean(pr)) %>%
   ungroup()
-
 
 hist_test <- hist_tas_test %>%
   dplyr::rename(tas = climate_variable) %>%
@@ -92,23 +88,9 @@ hist_test <- hist_tas_test %>%
               dplyr::rename(pr = climate_variable), 
             by = c("RegionName", "gcm", "ic", "Year", "Month")) %>%
   mutate(gcm_ic = paste(gcm, ic, sep='_')) %>%
-  group_by(RegionName, gcm, ic, Month) %>%
-  mutate(q = rev(rank(tas)))  %>%
-  mutate(p = q/ length(tas)) %>%
+  group_by(RegionName, gcm, ic, gcm_ic) %>%
+  summarise(tas = mean(tas), pr = mean(pr)) %>%
   ungroup()
-
-
-hist_train_truth <- hist_tas_train_truth %>%
-  dplyr::rename(tas = climate_variable) %>%
-  full_join(hist_pr_train_truth %>% 
-              dplyr::rename(pr = climate_variable), 
-            by = c("RegionName", "gcm", "ic", "Year", "Month")) %>% 
-  mutate(gcm_ic = paste(gcm, ic, sep='_')) %>% 
-  group_by(RegionName, gcm, ic, Month) %>%
-  mutate(q = rev(rank(tas)))  %>%
-  mutate(p = q/ length(tas)) %>%
-  ungroup()
-
 
 hist_test_truth <- hist_tas_test_truth %>%
   dplyr::rename(tas = climate_variable) %>%
@@ -116,19 +98,20 @@ hist_test_truth <- hist_tas_test_truth %>%
               dplyr::rename(pr = climate_variable), 
             by = c("RegionName", "gcm", "ic", "Year", "Month")) %>% 
   mutate(gcm_ic = paste(gcm, ic, sep='_')) %>% 
-  group_by(RegionName, gcm, ic, Month) %>%
-  mutate(q = rev(rank(tas)))  %>%
-  mutate(p = q/ length(tas)) %>%
+  group_by(RegionName, gcm, ic, gcm_ic) %>%
+  summarise(tas = mean(tas), pr = mean(pr)) %>%
   ungroup()
 
 
 
+
 GCM_Errors <- function(yhat, y){
-  yhat %>% full_join(y, by = c("RegionName", "Month", "q", "p")) %>%
+  yhat %>% full_join(y, by = c("RegionName")) %>%
     mutate(pr_error = pr.x - pr.y, 
            tas_error = tas.x - tas.y) %>%
-    select(RegionName, Month, q, p, 
-           tas_error, pr_error, 
+    select(RegionName,
+           tas_error, 
+           pr_error, 
            gcm = gcm.x, 
            ic = ic.x, 
            gcm_ic = gcm_ic.x, 
@@ -158,26 +141,27 @@ errors_df <- hist_train %>%
 
 # couple quick summaries
 errors_df %>%
-  group_by(gcm) %>%
+  group_by(RegionName) %>%
   summarise(mean(tas_error, na.rm = T), mean(pr_error, na.rm=TRUE)) %>%
   as.data.frame()
 
 
 # MODELING ----------------------------------------------------------------
 
-modeling_df <- na.omit(errors_df)
+modeling_df_climatology <- na.omit(errors_df) %>%
+  mutate(gcm_ic = as.factor(gcm_ic), gcm = as.factor(gcm))
 
-modeling_df_climatology <- modeling_df %>%
-  group_by(RegionName, lon, lat, gcm, ic, gcm_ic) %>%
-  summarise(tas_error = mean(tas_error, na.rm = TRUE), 
-            pr_error = mean(pr_error, na.rm = TRUE), 
-            tas_mod = mean(tas_mod, na.rm = TRUE), 
-            pr_mod = mean(pr_mod, na.rm = TRUE), 
-            tas_obs = mean(tas_obs, na.rm = TRUE), 
-            pr_obs = mean(pr_obs, na.rm = TRUE)) %>% 
-  ungroup() %>%
-  mutate(gcm_ic = as.factor(gcm_ic))#, 
-# Month = as.factor(Month))
+# modeling_df_climatology <- modeling_df %>%
+#   group_by(RegionName, lon, lat, gcm, ic, gcm_ic) %>%
+#   summarise(tas_error = mean(tas_error, na.rm = TRUE), 
+#             pr_error = mean(pr_error, na.rm = TRUE), 
+#             tas_mod = mean(tas_mod, na.rm = TRUE), 
+#             pr_mod = mean(pr_mod, na.rm = TRUE), 
+#             tas_obs = mean(tas_obs, na.rm = TRUE), 
+#             pr_obs = mean(pr_obs, na.rm = TRUE)) %>% 
+#   ungroup() %>%
+#   mutate(gcm_ic = as.factor(gcm_ic))#, 
+# # Month = as.factor(Month))
 
 test_df_climatology <- hist_test %>%
   group_by(RegionName, gcm, ic, gcm_ic) %>%
@@ -185,7 +169,8 @@ test_df_climatology <- hist_test %>%
              pr_mod = mean(pr, na.rm = TRUE))%>% 
   ungroup() %>%
   full_join(hu4_centroids %>% mutate(NAME = as.character(NAME)), by = c("RegionName" = "NAME")) %>%
-  mutate(gcm_ic = as.factor(gcm_ic))
+  mutate(gcm_ic = as.factor(gcm_ic), gcm = as.factor(gcm)) %>%
+  na.omit()
 
 
 #hist_test_truth
@@ -214,7 +199,8 @@ gcms <- as.character(modeling_df_climatology$gcm %>% unique()) %>%
   .[-length(.)]
 gcm_ics <- as.character(modeling_df_climatology$gcm_ic %>% unique())
 
-j=length(gcms)
+# testing
+j=6
 
 t1 <- Sys.time()
 mod <- mgcv::gam(list(
@@ -225,6 +211,9 @@ mod <- mgcv::gam(list(
     mutate(gcm = as.factor(gcm)) %>%
    filter(gcm %in% gcms[1:j]))
 Sys.time() - t1
+
+
+summary(mod)
 
 runGam <- function(df){
   mod <- mgcv::gam(list(
@@ -246,10 +235,10 @@ runGam <- function(df){
 
 yhat <- predict(mod, se.fit = TRUE)
 
-plot(yhat$fit[,1], modeling_df_climatology$tas_error)
-lines(x = c(-100:100), y=c(-100:100))
-plot(yhat$fit[,2]  + 3*yhat$se.fit[,2], modeling_df_climatology$pr_error)
-lines(x = c(-100:100), y=c(-100:100))
+# plot(yhat$fit[,1], modeling_df_climatology$tas_error)
+# lines(x = c(-100:100), y=c(-100:100))
+# plot(yhat$fit[,2]  + 3*yhat$se.fit[,2], modeling_df_climatology$pr_error)
+# lines(x = c(-100:100), y=c(-100:100))
 
 tas_error_error_distribution <- mod$fitted.values[,1] - modeling_df_climatology  %>%
   mutate(gcm = as.factor(gcm)) %>%
@@ -450,6 +439,8 @@ final_holdout_prediction_pr[1:len,] %>%
   )
 
 cor(final_holdout_prediction_pr[,-1])
+
+
 
 
 

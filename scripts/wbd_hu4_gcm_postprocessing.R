@@ -150,19 +150,20 @@ daily_pr_postprocessing <- function(s3_obj){
     dplyr::mutate( Date = as.Date(Date) ) %>% # in case not date type
     dplyr::mutate( Year  = lubridate::year(Date), 
                    Month = lubridate::month(Date)) %>% 
-    dplyr::mutate(pr_mm = 86400*climate_variable) %>%
+    #dplyr::mutate(pr_mm = 86400*climate_variable) %>%
     dplyr::group_by (RegionName, Year, Month) %>%
-    dplyr::summarise(pr_mm_max = max(pr_mm ), # to mm/day
-                     Date_max = Date[which.max(pr_mm)], 
-                     wet_days_percent = sum(pr_mm > 1) / dplyr::n(), 
-                     cdd = consec_dry_days(pr_mm, th = 1), 
-                     cwd = consec_wet_days(pr_mm, th = 1)
+    dplyr::summarise(pr_mean = mean(climate_variable), 
+                     pr_max = max(climate_variable)#, # to mm/day
+                     # Date_max = Date[which.max(pr_mm)], 
+                     # wet_days_percent = sum(pr_mm > 1) / dplyr::n(), 
+                     # cdd = consec_dry_days(pr_mm, th = 1), 
+                     # cwd = consec_wet_days(pr_mm, th = 1)
     ) %>%
     ungroup() %>%
     dplyr::mutate(gcm = dat$gcm, ic = dat$ic) %>%
-    dplyr::mutate(gcm_ic = paste(gcm, ic, sep='_')) %>%
-    dplyr::mutate(cdd = replace_inf(cdd), 
-                  cwd = replace_inf(cwd))
+    dplyr::mutate(gcm_ic = paste(gcm, ic, sep='_')) # %>%
+    # dplyr::mutate(cdd = replace_inf(cdd), 
+    #               cwd = replace_inf(cwd))
   
   return(df)
 }
@@ -250,7 +251,8 @@ saveRDS(daily_tas_statistics_historical, "cmip5_daily_tas_statistics_historical.
 tmp <- list()
 for(i in 1:nrow(s3_cmip5_rcp85_daily_tas_preprocessed)){
   print(i)
-  tmp[[i]] <- daily_tas_postprocessing(s3_obj = s3_cmip5_rcp85_daily_tas_preprocessed$Key[i])
+  tmp[[i]] <- daily_tas_postprocessing(s3_obj = s3_cmip5_rcp85_daily_tas_preprocessed$Key[i], 
+                                       pr_df = daily_pr_statistics_rcp85)
 }
 
 daily_tas_statistics_rcp85 <- purrr::reduce(.x = tmp, .f = rbind)

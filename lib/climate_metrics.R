@@ -27,3 +27,11 @@ Heating_degree_days <- function(x){
   y[y >= 0] <- 0
   return(sum(abs(y)))
 }
+
+rmse <- function(x, y){
+  sqrt(mean((x-y)^2))
+}
+
+coverage <- function(x, lwr, upr){
+  mean(x <= upr & x >= lwr)
+}
