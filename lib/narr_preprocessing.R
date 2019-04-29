@@ -97,3 +97,69 @@ preprocess_narr_file <- function(narr_key = s3_narr_daily_air.2m$Key[1],
   return(ts_df)
   
 }
+
+
+formTibble <- function(obj){
+  obj$ts_df$gcm <- obj$gcm
+  obj$ts_df$ic <- obj$ic
+  obj$ts_df %>% 
+    dplyr::mutate(Year = lubridate::year(Date), 
+                  Month = lubridate::month(Date)) %>%
+    dplyr::select(-Date) 
+}
+
+
+
+daily_apcp_postprocessing <- function(dat = narr_historical_apcp){
+  
+  df <- dat %>%
+    na.omit() %>%
+    dplyr::mutate( Date = as.Date(Date) ) %>% # in case not date type
+    dplyr::mutate( Year  = lubridate::year(Date), 
+                   Month = lubridate::month(Date)) %>% 
+    dplyr::group_by (RegionName, Year, Month) %>%
+    dplyr::summarise(pr_mean = mean(climate_variable), 
+                     pr_max = max(climate_variable), # to mm/day
+                     Date_max = Date[which.max(climate_variable)], 
+                     wet_days_percent = sum(climate_variable > 1) / dplyr::n(), 
+                     cdd = consec_dry_days(climate_variable, th = 1), 
+                     cwd = consec_wet_days(climate_variable, th = 1), 
+                     wet_days_percent = sum(climate_variable > 1) / dplyr::n()) %>%
+    ungroup() %>%
+    dplyr::mutate(cdd = replace_inf(cdd), 
+                  cwd = replace_inf(cwd))
+  
+  return(df)
+}
+
+daily_air_postprocessing <- function(dat){
+  
+  df <- dat %>%
+    na.omit() %>%
+    dplyr::mutate( Date = as.Date(Date) ) %>% # in case not date type
+    dplyr::mutate( Year  = lubridate::year(Date), 
+                   Month = lubridate::month(Date)) %>% 
+    dplyr::group_by (RegionName, Year, Month) %>%
+    dplyr::summarise(tas_mean = mean(climate_variable), # to mm/day
+                     heating_degree_days = Heating_degree_days(climate_variable), 
+                     cooling_degree_days = Cooling_degree_days(climate_variable)
+    ) %>%
+    ungroup() 
+  
+  return(df)
+}
+
+daily_rhum_postprocessing <- function(dat){
+  
+  df <- dat %>%
+    na.omit() %>%
+    dplyr::mutate( Date = as.Date(Date) ) %>% # in case not date type
+    dplyr::mutate( Year  = lubridate::year(Date), 
+                   Month = lubridate::month(Date)) %>% 
+    dplyr::group_by (RegionName, Year, Month) %>%
+    dplyr::summarise(rhum_mean = mean(climate_variable)
+    ) %>%
+    ungroup() 
+  
+  return(df)
+}

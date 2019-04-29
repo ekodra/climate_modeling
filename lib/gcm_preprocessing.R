@@ -271,4 +271,73 @@ safely_preprocess_gcm <- purrr::safely(preprocess_gcm)
 
 
 
+gcm_daily_pr_postprocessing <- function(s3_obj){
+  dat <- aws.s3::s3readRDS(object = s3_obj, 
+                           bucket = export_bucket)
+  df <- dat$ts_df %>%
+    na.omit() %>%
+    dplyr::mutate( Date = as.Date(Date) ) %>% # in case not date type
+    dplyr::mutate( Year  = lubridate::year(Date), 
+                   Month = lubridate::month(Date)) %>% 
+    dplyr::mutate(pr_mm = 86400*climate_variable) %>%
+    dplyr::group_by (RegionName, Year, Month) %>%
+    dplyr::summarise(pr_mean = mean(pr_mm), 
+                     pr_max = max(pr_mm),#, # to mm/day
+                     Date_max = Date[which.max(pr_mm)], 
+                     wet_days_percent = sum(pr_mm > 1) / dplyr::n(), 
+                     cdd = consec_dry_days(pr_mm, th = 1), 
+                     cwd = consec_wet_days(pr_mm, th = 1)
+    ) %>%
+    ungroup() %>%
+    dplyr::mutate(gcm = dat$gcm, ic = dat$ic) %>%
+    dplyr::mutate(gcm_ic = paste(gcm, ic, sep='_'))  %>%
+  dplyr::mutate(cdd = replace_inf(cdd), 
+                cwd = replace_inf(cwd))
+  
+  return(df)
+}
+
+
+# include: cdd, hdd, deviation from mean temp during extreme rainfall, mean temp
+gcm_daily_tas_postprocessing <- function(s3_obj = s3_cmip5_historical_daily_tas_preprocessed$Key[1], 
+                                     pr_df = daily_pr_statistics_historical){
+  
+  
+  dat <- aws.s3::s3readRDS(object = s3_obj, 
+                           bucket = export_bucket)
+  
+  df_pr_relation <- dat$ts_df %>%
+    na.omit() %>%
+    dplyr::mutate( Date = as.Date(Date) ) # in case not date type
+  
+  
+  # the piece where you get mean tas on the day of precip event
+  tas_pr_df <- pr_df %>%
+    dplyr::filter(gcm == dat$gcm & ic == dat$ic) %>%
+    dplyr::select(RegionName, Year, Month, Date_max) %>%
+    full_join(df_pr_relation, by = c("RegionName", "Date_max" = "Date")) %>% 
+    dplyr::rename(tas_prMaxima = climate_variable) 
+  
+  df <- dat$ts_df %>%
+    na.omit() %>%
+    dplyr::mutate( Date = as.Date(Date) ) %>% # in case not date type
+    dplyr::mutate( Year  = lubridate::year(Date), 
+                   Month = lubridate::month(Date)) %>% 
+    dplyr::group_by (RegionName, Year, Month) %>%
+    dplyr::summarise(tas_mean = mean(climate_variable), # to mm/day
+                     heating_degree_days = Heating_degree_days(climate_variable), 
+                     cooling_degree_days = Cooling_degree_days(climate_variable)
+    ) %>%
+    ungroup() %>%
+    dplyr::mutate(gcm = dat$gcm, ic = dat$ic) %>%
+    dplyr::mutate(gcm_ic = paste(gcm, ic, sep='_')) %>%
+    inner_join(  tas_pr_df, by = c("RegionName", "Year", "Month")) %>% 
+    na.omit() %>%
+    dplyr::mutate(pr_maxima_tas_anomaly = tas_prMaxima - tas_mean)
+  
+  df %>% group_by(Month) %>% summarise(mean(pr_maxima_tas_anomaly))
+  
+  return(df)
+}
+
 
