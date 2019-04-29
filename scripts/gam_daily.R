@@ -178,12 +178,15 @@ mod_means <- mgcv::gam(list(
 Sys.time() - t1
 
 
-bias_sf <- final_train %>% cbind(as_tibble(mod_means$fitted.values)) %>% 
+bias_sf <- final_train %>% 
+  cbind(as_tibble(mod_means$fitted.values)) %>% 
+  cbind(predict(mod_means, se.fit = TRUE)$se.fit) %>%
   filter(gcm == "ACCESS1-3") %>% 
   inner_join(hu4, by=c("RegionName" = "NAME")) %>% 
+  mutate(random_error = V2 - pr_mean_error) %>% 
   st_as_sf()
 
-pal <- colorNumeric(palette = "Spectral", domain = range(bias_sf$V2))
+pal <- colorNumeric(palette = "BrBG", domain = range(bias_sf$V2))
 bias_sf %>% 
   leaflet() %>%
   addTiles() %>%
@@ -194,12 +197,30 @@ plot(norm_density(final_train$pr_mean_error - mod_means$fitted.values[,2]),
      main = "Raw Bias - Smoothed Bias", xlab = "Random Error (Raw Bias - Smoothed Bias)")
 
 
-pal <- colorNumeric(palette = "Spectral", domain = range(bias_sf$pr_mean_error))
+pal <- colorNumeric(palette = "BrBG", domain = range(bias_sf$pr_mean_error))
 bias_sf %>% 
   leaflet() %>%
   addTiles() %>%
   addPolygons(fillColor = ~pal(pr_mean_error), color = "black", weight = 0.5, fillOpacity = 0.8) %>%
   addLegend(values = ~pr_mean_error, pal = pal, title = "Raw Bias")
+
+
+pal <- colorNumeric(palette = "YlOrRd", domain =range(bias_sf %>% 
+                      filter(`2` < 0.06) %>% .$`2`))
+bias_sf %>% 
+  filter(`2` < 0.06) %>%
+  leaflet() %>%
+  addTiles() %>%
+  addPolygons(fillColor = ~pal(`2`), color = "black", weight = 0.5, fillOpacity = 0.8) %>%
+  addLegend("bottomright", values = ~`2`, pal = pal, title = "Standard Error in Bias Estimation")
+
+pal <- colorNumeric(palette = "BrBG", domain = bias_sf$random_error)
+bias_sf %>% 
+  leaflet() %>%
+  addTiles() %>%
+  addPolygons(fillColor = ~pal(random_error), color = "black", weight = 0.5, fillOpacity = 0.8) %>%
+  addLegend("bottomright", values = ~random_error, pal = pal, title = "Random Residual Error")
+
 
 
 
