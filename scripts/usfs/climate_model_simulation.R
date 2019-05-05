@@ -1188,7 +1188,7 @@ rcp85_cdd_projections_full_delta$upr <- apply(X = rcp85_cdd_projections_full_del
 ## ffmpeg calls in terminal
 # ffmpeg -framerate 5 -pattern_type glob -i 'pyrome_rcp85_cdd_MAM_*.png' -c:v libx264 -r 30 -pix_fmt yuv420p rcp85_cdd_MAM.mp4
 # ffmpeg -framerate 5 -pattern_type glob -i 'pyrome_rcp85_cdd_SON_*.png' -c:v libx264 -r 30 -pix_fmt yuv420p rcp85_cdd_SON.mp4
-# ffmpeg -framerate 5 -pattern_type glob -i 'pyrome_rcp85_cdd_DJF_*.png' -c:v libx264 -r 30 -pix_fmt yuv420p rcp85_cdd_DJF.mp4
+# ffmpeg -framerate 5 -pattern_type glob -i 'images/pyrome_rcp85_cdd_DJF_*.png' -c:v libx264 -r 30 -pix_fmt yuv420p movies/pyrome_rcp85_cdd_DJF.mp4
 # ffmpeg -framerate 5 -pattern_type glob -i 'hu4_graphs_rcp85_tas_mean_JJA_*.png' -c:v libx264 -r 30 -pix_fmt yuv420p hu4_rcp85_tas_mean_JJA.mp4
 
 areas <- tibble(RegionName = pyromes$FPU_CODE, RelativeSize = as.numeric((pyromes %>% st_area())))
